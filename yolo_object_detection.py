@@ -11,18 +11,19 @@ import cv2
 import os
 
 # construct the argument parse and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--input", type=str, default="", help="path to (optional) input video file")
-ap.add_argument("-o", "--output", type=str, default="", help="path to (optional) output video file")
-ap.add_argument("-d", "--display", type=int, default=1, help="whether or not output frame should be displayed")
-ap.add_argument("-y", "--yolo", required=True, help="base path to YOLO directory")
-ap.add_argument("-c", "--confidence", type=float, default=0.5, help="minimum probability to filter weak detections")
-ap.add_argument("-t", "--threshold", type=float, default=0.3, help="threshold when applyong non-maxima suppression")
-ap.add_argument("-u", "--use-gpu", type=bool, default=0, help="boolean indicating if CUDA GPU should be used")
-args = vars(ap.parse_args())
+# ap = argparse.ArgumentParser()
+# ap.add_argument("-i", "--input", type=str, default="", help="path to (optional) input video file")
+# ap.add_argument("-o", "--output", type=str, default="", help="path to (optional) output video file")
+# ap.add_argument("-d", "--display", type=int, default=1, help="whether or not output frame should be displayed")
+# ap.add_argument("-y", "--yolo", required=True, help="base path to YOLO directory")
+# ap.add_argument("-c", "--confidence", type=float, default=0.5, help="minimum probability to filter weak detections")
+# ap.add_argument("-t", "--threshold", type=float, default=0.3, help="threshold when applyong non-maxima suppression")
+# ap.add_argument("-u", "--use-gpu", type=bool, default=0, help="boolean indicating if CUDA GPU should be used")
+# args = vars(ap.parse_args())
 
 # load the COCO class labels our YOLO model was trained on
-labelsPath = os.path.sep.join([args["yolo"], "coco.names"])
+yolo = "yolo-coco"
+labelsPath = os.path.sep.join([yolo, "coco.names"])
 LABELS = open(labelsPath).read().strip().split("\n")
 
 # initialize a list of colors to represent each possible class label
@@ -30,15 +31,16 @@ np.random.seed(42)
 COLORS = np.random.randint(0, 255, size=(len(LABELS), 3), dtype="uint8")
 
 # derive the paths to the YOLO weights and model configuration
-weightsPath = os.path.sep.join([args["yolo"], "yolov3.weights"])
-configPath = os.path.sep.join([args["yolo"], "yolov3.cfg"])
+weightsPath = os.path.sep.join([yolo, "yolov3.weights"])
+configPath = os.path.sep.join([yolo, "yolov3.cfg"])
 
 # load our YOLO object detector trained on COCO dataset (80 classes)
 print("[INFO] loading YOLO from disk...")
 net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
 
 # check if we are going to use GPU
-if args["use_gpu"]:
+use_gpu = False
+if use_gpu:
 	# set CUDA as the preferable backend and target
 	print("[INFO] setting preferable backend and target to CUDA...")
 	net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
@@ -55,7 +57,8 @@ H = None
 # initialize the video stream and pointer to output video file, then
 # start the FPS timer
 print("[INFO] accessing video stream...")
-vs = cv2.VideoCapture(args["input"] if args["input"] else 0)
+input_file = ""
+vs = cv2.VideoCapture(input_file if input_file else 0)
 writer = None
 fps = FPS().start()
 
@@ -86,6 +89,7 @@ while True:
 	confidences = []
 	classIDs = []
 
+	confidence_minimum_value = 0.5
 	# loop over each of the layer outputs
 	for output in layerOutputs:
 		# loop over each of the detections
@@ -98,7 +102,7 @@ while True:
 
 			# filter out weak predictions by ensuring the detected
 			# probability is greater than the minimum probability
-			if confidence > args["confidence"]:
+			if confidence > confidence_minimum_value:
 				# scale the bounding box coordinates back relative to
 				# the size of the image, keeping in mind that YOLO
 				# actually returns the center (x, y)-coordinates of
@@ -120,7 +124,8 @@ while True:
 
 	# apply non-maxima suppression to suppress weak, overlapping
 	# bounding boxes
-	idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"], args["threshold"])
+	threshold = 0.3
+	idxs = cv2.dnn.NMSBoxes(boxes, confidences, confidence_minimum_value, threshold)
 
 	# ensure at least one detection exists
 	if len(idxs) > 0:
@@ -138,7 +143,8 @@ while True:
 
 	# check to see if the output frame should be displayed to our
 	# screen
-	if args["display"] > 0:
+	display = 1
+	if display > 0:
 		# show the output frame
 		cv2.imshow("Frame", frame)
 		key = cv2.waitKey(1) & 0xFF
@@ -149,11 +155,11 @@ while True:
 
 	# if an output video file path has been supplied and the video
 	# writer has not been initialized, do so now
-	if args["output"] != "" and writer is None:
+	output_file = ""
+	if output_file != "" and writer is None:
 		# initialize our video writer
 		fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-		writer = cv2.VideoWriter(args["output"], fourcc, 30,
-			(frame.shape[1], frame.shape[0]), True)
+		writer = cv2.VideoWriter(output_file, fourcc, 30, (frame.shape[1], frame.shape[0]), True)
 
 	# if the video writer is not None, write the frame to the output
 	# video file
